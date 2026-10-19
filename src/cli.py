@@ -11,6 +11,7 @@ from pathlib import Path
 
 from app_settings import AppSettingsStore, normalize_pipeline_visibility
 from pipelines import load_pipeline_catalog
+from processing_methods import PROCESSING_BRANCHES
 from workflows import run_batch
 
 
@@ -141,9 +142,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--processing-branch",
-        choices=("Processing", "ProcessingAlt"),
+        choices=PROCESSING_BRANCHES,
         default="Processing",
-        help="EyeFlow method whose exported metrics are analyzed.",
+        help="EyeFlow method: Processing/ProcessingMoments (moments), or ProcessingAlt/ProcessingBandRatio (band ratio).",
     )
     parser.add_argument(
         "--zip",

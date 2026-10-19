@@ -18,6 +18,7 @@ from input_output.output_paths import (
     h5_output_dir,
 )
 from pipelines import PipelineContext, PipelineDescriptor
+from processing_methods import normalize_processing_branch
 
 
 @dataclass
@@ -67,8 +68,7 @@ def run_batch(
         raise ValueError("Select .holo files or one folder containing .holo files.")
     if not pipelines:
         raise ValueError("Select at least one statistical pipeline.")
-    if processing_branch not in {"Processing", "ProcessingAlt"}:
-        raise ValueError("Processing branch must be Processing or ProcessingAlt.")
+    processing_branch = normalize_processing_branch(processing_branch)
     if zip_outputs and (Path(zip_name).name != zip_name or not zip_name.strip()):
         raise ValueError("ZIP name must be a filename without directory components.")
     plan = prepare_run_inputs(input_paths)
@@ -117,6 +117,7 @@ def run_batch(
     total = input_count + len(pipelines)
     completed = 0
     report_entries: list[dict] = []
+    input_provenance: list[dict] = []
 
     def emit(message: str) -> None:
         if log is not None:
@@ -137,6 +138,17 @@ def run_batch(
             with h5py.File(destination, "a") as analysis:
                 analysis.attrs["angioeye_input_file"] = str(source)
                 analysis.attrs["angioeye_input_holo"] = str(holo)
+                input_provenance.append(
+                    {
+                        "input_file": str(source),
+                        "source_processing_branch": analysis.attrs[
+                            "angioeye_processing_branch"
+                        ],
+                        "velocity_estimation_method": analysis.attrs[
+                            "angioeye_velocity_estimation_method"
+                        ],
+                    }
+                )
             staged.append(destination)
             result.input_files.append(source)
             emit(f"[INPUT] {holo} -> {source} -> {destination.relative_to(batch_root)}")
@@ -252,6 +264,7 @@ def run_batch(
         json.dumps(
             {
                 "processing_branch": processing_branch,
+                "input_provenance": input_provenance,
                 "input_holo_files": [
                     str(path.resolve()) for path in plan.selected_holo_paths
                 ],

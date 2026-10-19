@@ -15,6 +15,12 @@ script, and compiles the final setup executable into dist\installer.
 
 .EXAMPLE
 .\build_installer.ps1 -Console
+
+.EXAMPLE
+.\build_installer.ps1 -PortableOnly
+
+.EXAMPLE
+.\build_installer.ps1 -Standalone
 #>
 
 [CmdletBinding()]
@@ -22,6 +28,8 @@ param(
     [string]$InnoSetupCompiler = "",
     [string]$Python = "",
     [switch]$Console,
+    [switch]$PortableOnly,
+    [switch]$Standalone,
     [switch]$SkipClean
 )
 
@@ -264,7 +272,13 @@ function Write-PyInstallerSpec {
     $logo = ConvertTo-PythonLiteralPath (Join-Path $RepoRoot "Angioeye_logo.png")
     $settings = ConvertTo-PythonLiteralPath (Join-Path $RepoRoot "default_settings.json")
     $pyproject = ConvertTo-PythonLiteralPath $PyprojectPath
+    $license = ConvertTo-PythonLiteralPath (Join-Path $RepoRoot "LICENSE")
+    $notices = ConvertTo-PythonLiteralPath (Join-Path $RepoRoot "THIRD_PARTY_NOTICES")
     $pyInstallerConsole = "False"
+    $pyInstallerStandalone = "False"
+    if ($Standalone) {
+        $pyInstallerStandalone = "True"
+    }
     if ($Console) {
         $pyInstallerConsole = "True"
     }
@@ -286,6 +300,8 @@ def common_datas():
     datas += [(r'$icon', ".")]
     datas += [(r'$settings', ".")]
     datas += [(r'$pyproject', ".")]
+    datas += [(r'$license', ".")]
+    datas += [(r'$notices', ".")]
     return datas
 
 
@@ -323,30 +339,25 @@ def script_entry(name):
             return [item]
     raise RuntimeError(f"Could not find PyInstaller script entry: {name}")
 
-gui_exe = EXE(
-    pyz,
-    script_entry("angioeye_gui_entry"),
-    [],
-    exclude_binaries=True,
-    name="AngioEye",
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=$pyInstallerConsole,
-    disable_windowed_traceback=False,
-    icon=r'$icon',
-)
-
-coll = COLLECT(
-    gui_exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name="AngioEye",
-)
+if ${pyInstallerStandalone}:
+    gui_exe = EXE(
+        pyz, a.scripts, a.binaries, a.datas, [],
+        name="AngioEye", debug=False, bootloader_ignore_signals=False,
+        strip=False, upx=True, console=$pyInstallerConsole,
+        disable_windowed_traceback=False, icon=r'$icon',
+    )
+else:
+    gui_exe = EXE(
+        pyz, script_entry("angioeye_gui_entry"), [],
+        exclude_binaries=True, name="AngioEye", debug=False,
+        bootloader_ignore_signals=False, strip=False, upx=True,
+        console=$pyInstallerConsole, disable_windowed_traceback=False,
+        icon=r'$icon',
+    )
+    coll = COLLECT(
+        gui_exe, a.binaries, a.datas, strip=False, upx=True,
+        upx_exclude=[], name="AngioEye",
+    )
 "@ | Set-Content -LiteralPath $GeneratedSpec -Encoding UTF8
 }
 
@@ -487,6 +498,9 @@ $appName = $metadata.Name
 $appVersion = $metadata.Version
 $bundleDir = Join-Path $PyInstallerDistDir "AngioEye"
 $guiExe = Join-Path $bundleDir "AngioEye.exe"
+if ($Standalone) {
+    $guiExe = Join-Path $PyInstallerDistDir "AngioEye.exe"
+}
 
 Write-Host "Building $appName $appVersion installer..."
 
@@ -513,7 +527,18 @@ Invoke-PyInstaller -Arguments @(
 if (-not (Test-Path -LiteralPath $guiExe -PathType Leaf)) {
     throw "PyInstaller did not produce the expected executable: $guiExe"
 }
+if ($Standalone) {
+    $standalonePath = Join-Path $InstallerOutputDir "$appName-v$appVersion.exe"
+    Copy-Item -LiteralPath $guiExe -Destination $standalonePath -Force
+    Write-Host "Standalone application created: $standalonePath"
+    return
+}
 Copy-InstallerExtras -BundleDir $bundleDir
+
+if ($PortableOnly) {
+    Write-Host "Portable application created: $bundleDir"
+    return
+}
 
 $iscc = Resolve-InnoSetupCompiler
 Write-InnoSetupScript -AppName $appName -AppVersion $appVersion -BundleDir $bundleDir

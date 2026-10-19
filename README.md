@@ -9,6 +9,12 @@ Pipelines library and runs each selected tool once over the batch.
 
 ## Installation
 
+For the community Windows build, download `AngioEye-v1.24.1.exe` from
+[Releases](https://github.com/sslnevefocusrite/AngioEye/releases). It runs without
+installing Python. Developers can build this standalone executable with
+`./build_installer.ps1 -Standalone`; the default build still creates an Inno
+Setup installer when its compiler is installed.
+
 Python 3.10 or later is required. From a checkout:
 
 ```powershell
@@ -53,10 +59,37 @@ acquisitions with available results still run; missing results are reported in
 the log and `batch_run.json`. HoloDoppler, DopplerView, and unrelated HDF5 files
 are excluded from input discovery.
 
-Select the EyeFlow processing branch to analyze:
+Select the EyeFlow method to analyze:
 
-- `Processing` reads `/Processing/Metrics`.
-- `ProcessingAlt` reads `/ProcessingAlt/Metrics`.
+| GUI selection | Current EyeFlow root | Older EyeFlow root |
+| --- | --- | --- |
+| Doppler moments | `/ProcessingMoments` | `/Processing` |
+| Frequency-band ratio | `/ProcessingBandRatio` | `/ProcessingAlt` |
+
+The CLI accepts all four root names with `--processing-branch`. Each selection
+resolves only within its method, including in batches mixing old and new files.
+Separate old and new roots for the same method are rejected as ambiguous;
+conflicting method metadata is also rejected. No method is substituted when the
+selected method is missing.
+
+This **1.24.1 community compatibility build** is maintained at
+[sslnevefocusrite/AngioEye](https://github.com/sslnevefocusrite/AngioEye), based on
+DigitalHolography's v1.24.0. The adapter follows
+[EyeFlow v1.22.0's schema](https://github.com/DigitalHolography/EyeFlow/blob/v1.22.0/src/input_output/schema/eyeflow_output.py).
+It maps global `Velocity/PerBeat/Global/Raw/{ArterySignal,VeinSignal}` and
+`Raw/BandLimited/{ArterySignal,VeinSignal}` to AngioEye's existing analysis paths.
+Filtered signals are retained separately, with their original attributes; they
+are never substituted for raw signals. EyeFlow v1.22 waveform metrics are
+calculated from filtered signals upstream. Those exported metrics are copied
+unchanged; compatibility does not imply numerical equivalence across EyeFlow
+versions. No filtering, unit conversion, or axis reordering is performed here.
+
+Existing `BloodVolumeRate` products are preserved in the analysis file and listed
+in the metrics manifest when present. This does not add a BVR calculation or a
+new statistical pipeline. The actual source root and method are recorded in
+each analysis HDF5 and in the batch and metrics manifests. Source files remain
+unchanged. Separate output folders should be used for the two methods, as a
+second run to the same destination replaces its analysis results.
 
 The supplied `260312_GUJ_4_EF.h5` example contains both branches, with
 `waveform_shape_metrics`, `absolute_waveform_metrics`, and

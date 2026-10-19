@@ -8,6 +8,7 @@ from queue import Empty, Queue
 from threading import Thread
 
 from input_output.inputs import validate_input_paths
+from processing_methods import normalize_processing_branch
 from workflows import run_batch
 
 from ..services import services_for
@@ -134,7 +135,7 @@ class RunTabController(ViewController):
     def persist_processing_branch(self, *_args) -> None:
         try:
             self.app.settings_store.save_processing_branch(
-                self.processing_branch_var.get()
+                normalize_processing_branch(self.processing_branch_var.get())
             )
         except OSError as exc:
             self.app._show_settings_warning(
@@ -249,7 +250,9 @@ class RunTabController(ViewController):
         options = {
             "zip_outputs": bool(self.zip_outputs_var.get()),
             "zip_name": self.zip_name_var.get(),
-            "processing_branch": self.processing_branch_var.get(),
+            "processing_branch": normalize_processing_branch(
+                self.processing_branch_var.get()
+            ),
         }
 
         def work() -> None:

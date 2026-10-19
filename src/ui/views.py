@@ -189,15 +189,15 @@ class RunTab(ttk.Frame):
         )
         controller.set_widget("run_button", run_btn)
 
-        ttk.Label(advanced_input_frame, text="EyeFlow branch").grid(
+        ttk.Label(advanced_input_frame, text="EyeFlow method").grid(
             row=3, column=0, sticky="w", padx=(0, 16), pady=(10, 0)
         )
         processing_branch = ttk.Combobox(
             advanced_input_frame,
             textvariable=controller.processing_branch_var,
-            values=("Processing", "ProcessingAlt"),
+            values=("Doppler moments", "Frequency-band ratio"),
             state="readonly",
-            width=18,
+            width=24,
         )
         processing_branch.grid(row=3, column=1, sticky="w", pady=(10, 0))
         processing_branch.bind(

@@ -53,7 +53,13 @@ class PipelineMetricsManifestPipeline(BatchPipeline):
             relative_path = str(file_path)
 
         pipelines: list[dict[str, object]] = []
+        source_products: dict[str, list[str]] = {}
         with h5py.File(file_path, "r") as h5file:
+            source_branch = str(h5file.attrs.get("angioeye_processing_branch", ""))
+            method = str(h5file.attrs.get("angioeye_velocity_estimation_method", ""))
+            bvr = h5file.get("Processing/BloodVolumeRate")
+            if isinstance(bvr, h5py.Group):
+                source_products["BloodVolumeRate"] = self._collect_dataset_paths(bvr)
             pipelines_group = get_processing_root(h5file)
             if pipelines_group is not None:
                 for group_name, group in pipelines_group.items():
@@ -71,6 +77,9 @@ class PipelineMetricsManifestPipeline(BatchPipeline):
 
         return {
             "path": relative_path,
+            "source_processing_branch": source_branch,
+            "velocity_estimation_method": method,
+            "source_products": source_products,
             "pipeline_count": len(pipelines),
             "pipelines": pipelines,
         }

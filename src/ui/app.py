@@ -5,6 +5,7 @@ from tkinter import ttk
 
 from app_settings import AppSettingsStore, app_display_name
 from pipelines import PipelineDescriptor
+from processing_methods import PROCESSING_LABELS
 
 from .compat import BaseAppTk, sv_ttk
 from .controllers import (
@@ -49,7 +50,7 @@ class ProcessApp(
         self.batch_input_paths: list[Path] = []
         self.batch_selection_label = ""
         self.processing_branch_var = tk.StringVar(
-            value=self.settings_store.load_processing_branch()
+            value=PROCESSING_LABELS[self.settings_store.load_processing_branch()]
         )
         self._batch_running = False
         self.minimal_status_var = tk.StringVar(value="Ready.")

@@ -395,7 +395,7 @@ class GuiConstructionTests(unittest.TestCase):
                     "Pipeline Metrics Manifest", [item.name for item in selected]
                 )
                 self.assertTrue(all(item.available for item in selected))
-                self.assertEqual(app.processing_branch_var.get(), "Processing")
+                self.assertEqual(app.processing_branch_var.get(), "Doppler moments")
                 self.assertEqual(
                     app.minimal_select_button.cget("text"), "Select .holo files"
                 )

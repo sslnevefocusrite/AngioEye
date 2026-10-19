@@ -9,6 +9,8 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
+from processing_methods import normalize_processing_branch
+
 APP_NAME = "AngioEye"
 SETTINGS_FILENAME = "settings.json"
 DEFAULT_SETTINGS_FILENAME = "default_settings.json"
@@ -254,15 +256,13 @@ class AppSettingsStore:
 
     def load_processing_branch(self) -> str:
         value = self.load().get("processing_branch", "Processing")
-        return (
-            value
-            if isinstance(value, str) and value in {"Processing", "ProcessingAlt"}
-            else "Processing"
-        )
+        try:
+            return normalize_processing_branch(value)
+        except ValueError:
+            return "Processing"
 
     def save_processing_branch(self, processing_branch: str) -> None:
-        if processing_branch not in {"Processing", "ProcessingAlt"}:
-            raise ValueError("Choose Processing or ProcessingAlt.")
+        processing_branch = normalize_processing_branch(processing_branch)
         settings = self.load()
         settings["processing_branch"] = processing_branch
         self.save(settings)

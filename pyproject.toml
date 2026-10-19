@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "AngioEye"
-version = "1.24.0"
+version = "1.24.1"
 description = "Batch statistical analysis of EyeFlow exports"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,7 @@ py-modules = [
     "dependency_utils",
     "batch_engine",
     "launcher",
+    "processing_methods",
 ]
 
 [tool.setuptools.packages.find]

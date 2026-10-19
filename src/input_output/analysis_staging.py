@@ -10,14 +10,71 @@ from tempfile import NamedTemporaryFile
 import h5py
 
 from app_settings import app_version
-
-PROCESSING_BRANCHES = ("Processing", "ProcessingAlt")
-_SIGNAL_PATHS = (
-    "VelocityPerBeat/Artery/Raw/value",
-    "VelocityPerBeat/Artery/BandLimited/value",
-    "VelocityPerBeat/Vein/Raw/value",
-    "VelocityPerBeat/Vein/BandLimited/value",
+from processing_methods import (
+    PROCESSING_BRANCHES as PROCESSING_BRANCHES,
 )
+from processing_methods import (
+    PROCESSING_METHODS,
+    PROCESSING_ROOTS,
+    normalize_processing_branch,
+)
+
+
+def _selected_branch(original: h5py.File, selection: str) -> h5py.Group:
+    roots = PROCESSING_ROOTS[selection]
+    present = [root for root in roots if root in original]
+    if len(present) == 2 and original[present[0]].id != original[present[1]].id:
+        raise ValueError(
+            f"Ambiguous EyeFlow input: both /{roots[0]} and /{roots[1]} exist "
+            "as separate objects for the selected method."
+        )
+    branch = original.get(present[0]) if present else None
+    if not isinstance(branch, h5py.Group) or not isinstance(
+        branch.get("Metrics"), h5py.Group
+    ):
+        expected = " or ".join(f"/{root}/Metrics" for root in roots)
+        raise ValueError(f"EyeFlow input {original.filename} has no {expected} group.")
+    declared = branch.attrs.get("velocity_estimation_method")
+    if isinstance(declared, bytes):
+        declared = declared.decode("utf-8")
+    if declared is not None and declared != PROCESSING_METHODS[selection]:
+        raise ValueError(
+            f"EyeFlow {branch.name} declares velocity_estimation_method={declared!r}, "
+            f"but the selected method is {PROCESSING_METHODS[selection]!r}."
+        )
+    return branch
+
+
+def _copy_signals(branch: h5py.Group, processing: h5py.Group) -> None:
+    """Keep current representations distinct; alias only raw to legacy raw paths."""
+    for vessel in ("Artery", "Vein"):
+        for representation in ("Raw", "Filtered"):
+            for bandlimited in (False, True):
+                band = "BandLimited/" if bandlimited else ""
+                current = (
+                    f"Velocity/PerBeat/Global/{representation}/{band}{vessel}Signal"
+                )
+                if isinstance(branch.get(current), h5py.Dataset):
+                    _copy_object(branch, processing, current)
+                    processing[current].attrs["angioeye_source_dataset"] = branch[
+                        current
+                    ].name
+        for mode, band in (("Raw", ""), ("BandLimited", "BandLimited/")):
+            legacy = f"VelocityPerBeat/{vessel}/{mode}/value"
+            current = f"Velocity/PerBeat/Global/Raw/{band}{vessel}Signal"
+            if legacy in branch and current in branch:
+                if branch[legacy].id != branch[current].id:
+                    raise ValueError(
+                        f"Ambiguous EyeFlow waveform: {branch.name}/{legacy} and "
+                        f"{branch.name}/{current} both exist as separate objects."
+                    )
+            if isinstance(processing.get(current), h5py.Dataset):
+                parent, name = legacy.rsplit("/", 1)
+                processing.require_group(parent)[name] = processing[current]
+            else:
+                _copy_object(branch, processing, legacy)
+
+
 _SEGMENTATION_METADATA_PATHS = (
     "PixelPitch_m",
     "OpticDisc/Center",
@@ -58,15 +115,11 @@ def stage_analysis_file(
 
     Metrics retain their dataset attributes and axes. The selected branch is
     always stored under ``/Processing`` so statistical readers use one schema.
-    Only global beat signals, cardiac timing and small geometry metadata are
-    retained alongside the metrics; images and segment waveform stacks stay
-    in the original EyeFlow file.
+    Global beat signals, cardiac timing, exported blood-volume-rate products
+    and small geometry metadata are retained alongside the metrics; images and
+    segment velocity waveform stacks stay in the original EyeFlow file.
     """
-    if processing_branch not in PROCESSING_BRANCHES:
-        raise ValueError(
-            f"Unknown EyeFlow processing branch {processing_branch!r}; "
-            f"expected one of {', '.join(PROCESSING_BRANCHES)}."
-        )
+    selection = normalize_processing_branch(processing_branch)
     source = Path(source).expanduser()
     destination = Path(destination).expanduser()
     if source.resolve() == destination.resolve() or (
@@ -75,13 +128,7 @@ def stage_analysis_file(
         raise ValueError("The analysis output must differ from the EyeFlow source.")
 
     with h5py.File(source, "r") as original:
-        branch = original.get(processing_branch)
-        if not isinstance(branch, h5py.Group) or not isinstance(
-            branch.get("Metrics"), h5py.Group
-        ):
-            raise ValueError(
-                f"EyeFlow input {source} has no /{processing_branch}/Metrics group."
-            )
+        branch = _selected_branch(original, selection)
 
         versions = {}
         if isinstance(original.get("app_versions"), h5py.Dataset):
@@ -105,14 +152,18 @@ def stage_analysis_file(
                 for key, value in original.attrs.items():
                     staged.attrs[key] = value
                 staged.attrs["angioeye_input_file"] = str(source.resolve())
-                staged.attrs["angioeye_processing_branch"] = processing_branch
+                staged.attrs["angioeye_processing_branch"] = branch.name.lstrip("/")
+                staged.attrs["angioeye_processing_selection"] = selection
+                staged.attrs["angioeye_velocity_estimation_method"] = (
+                    PROCESSING_METHODS[selection]
+                )
                 processing = staged.create_group("Processing")
                 for key, value in branch.attrs.items():
                     processing.attrs[key] = value
                 _copy_object(branch, processing, "Metrics")
                 _copy_object(branch, processing, "CardiacCycle")
-                for path in _SIGNAL_PATHS:
-                    _copy_object(branch, processing, path)
+                _copy_signals(branch, processing)
+                _copy_object(branch, processing, "BloodVolumeRate")
                 _copy_object(original, staged, "Meta")
                 segmentation = original.get("Segmentation")
                 if isinstance(segmentation, h5py.Group):

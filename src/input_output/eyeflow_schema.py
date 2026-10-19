@@ -1,7 +1,7 @@
 """EyeFlow HDF5 schema paths and backward-compatible dataset lookup.
 
-The current EyeFlow layout is canonical. Earlier paths remain readable for
-existing reports and cohorts.
+These are AngioEye's normalized analysis paths. analysis_staging adapts current
+EyeFlow exports; earlier paths remain readable for existing reports and cohorts.
 """
 
 from __future__ import annotations
